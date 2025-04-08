@@ -78,7 +78,7 @@ def main():
     )
     argparser.add_argument(
         "--interval",
-        default=60,
+        default=0.25,
         type=int,
         help="Interval to update user groups (minutes)",
     )
