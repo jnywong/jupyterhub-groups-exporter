@@ -58,7 +58,7 @@ def get_user_groups(hub_url, **kwargs):
     """
     Get the user groups from the JupyterHub API
     """
-    time.sleep(15)  # wait for JupyterHub to proxy routes
+    time.sleep(15)  # wait for JupyterHub to proxy routes on startup
     token = get_service_token()
     response = api_request(
         hub_url,
@@ -78,7 +78,7 @@ def main():
     )
     argparser.add_argument(
         "--interval",
-        default=0.25,
+        default=60,
         type=int,
         help="Interval to update user groups (minutes)",
     )
