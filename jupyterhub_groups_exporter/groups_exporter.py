@@ -42,20 +42,23 @@ async def api_request(hub_url, path, token=None, parse_json=True, **kwargs):
     url = f"{hub_url}/hub/api/{path}"
     logger.info(f"api_request: {url}, {kwargs}")
     client = AsyncHTTPClient()
-    resp = await client.fetch(url, **kwargs)
-    if not parse_json:
-        return resp
-    if resp.body:
-        return json.loads(resp.body.decode("utf8"))
+    try:
+        resp = await client.fetch(url, **kwargs)
+    except Exception as e:
+        logger.info(f"Error fetching {url}: {e}")
     else:
-        return None
+        if not parse_json:
+            return resp
+        if resp.body:
+            return json.loads(resp.body.decode("utf8"))
+        else:
+            return None
 
 
 async def get_user_groups(hub_url, **kwargs):
     """
     Get the user groups from the JupyterHub API
     """
-    time.sleep(15)  # wait for JupyterHub to proxy routes on startup
     token = get_service_token()
     response = await api_request(
         hub_url,
