@@ -1,6 +1,7 @@
 import pathlib
 import secrets
 import sys
+import os
 
 c = get_config()  # noqa
 
@@ -17,13 +18,13 @@ c.JupyterHub.cleanup_servers = True
 
 c.JupyterHub.load_roles = [
     {
-        "name": "user-groups",
+        "name": "groups-exporter",
         "scopes": [
             "users",
             "groups",
         ],
-        "services": ["user-groups"],
-    }
+        "services": ["groups-exporter"],
+    },
 ]
 
 here = pathlib.Path(__file__).parent
@@ -40,16 +41,17 @@ service_port = 9090
 service_interval = 1  # minutes
 c.JupyterHub.services = [
     {
-        "name": "user-groups",
+        "name": "groups-exporter",
         "api_token": token,
         "url": f"http://{c.JupyterHub.ip}:{service_port}",
         "command": [
             sys.executable,
-            "jupyterhub_groups_exporter/groups_exporter.py",
+            "-m",
+            "jupyterhub_groups_exporter.groups_exporter",
             "--port",
             f"{service_port}",
             "--interval",
             f"{service_interval}",
         ],
-    }
+    },
 ]
