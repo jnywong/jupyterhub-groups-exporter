@@ -45,7 +45,7 @@ c.JupyterHub.services = [
         "url": f"http://{c.JupyterHub.ip}:{service_port}",
         "command": [
             sys.executable,
-            "jupyterhub_user_groups/user_groups.py",
+            "jupyterhub_groups_exporter/user_groups.py",
             "--port",
             f"{service_port}",
             "--interval",
