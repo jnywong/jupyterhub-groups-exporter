@@ -33,9 +33,10 @@ dynamic = ["version"]
 
 [project.optional-dependencies]
 test = [
+    "jupyter_server>=2.0.0",
+    "pycurl>=7.43.0",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.26.0",
-    "jupyter_server>=2.0.0",
 ]
 
 # [project.urls]
