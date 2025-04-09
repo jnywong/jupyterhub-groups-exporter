@@ -10,7 +10,7 @@ build-backend = "hatchling.build"
 # - ref 2: https://hatch.pypa.io/latest/config/metadata/#project-metadata
 #
 [project]
-name = "jupyterhub_user_groups"
+name = "jupyterhub_groups_exporter"
 description = "JupyterHub service to export user group membership to Prometheus."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -37,15 +37,15 @@ test = [
 ]
 
 # [project.urls]
-# Documentation = "https://jupyterhub_user_groups.readthedocs.io"
-# Source = "https://github.com/jupyterhub/jupyterhub_user_groups"
-# Issues = "https://github.com/jupyterhub/jupyterhub_user_groups/issues"
+# Documentation = "https://jupyterhub_groups_exporter.readthedocs.io"
+# Source = "https://github.com/jupyterhub/jupyterhub_groups_exporter"
+# Issues = "https://github.com/jupyterhub/jupyterhub_groups_exporter/issues"
 
 
 # hatch ref: https://hatch.pypa.io/latest/
 #
 [tool.hatch.version]
-path = "jupyterhub_user_groups/_version.py"
+path = "jupyterhub_groups_exporter/_version.py"
 
 [tool.hatch.metadata]
 allow-direct-references = true
@@ -98,7 +98,7 @@ testpaths = ["tests"]
 # ref: https://github.com/your-tools/tbump#readme
 #
 # [tool.tbump]
-# github_url = "https://github.com/jupyterhub/jupyterhub_user_groups"
+# github_url = "https://github.com/jupyterhub/jupyterhub_groups_exporter"
 
 # [tool.tbump.version]
 # current = "0.0.1.dev0"
@@ -118,4 +118,4 @@ testpaths = ["tests"]
 # tag_template = "{new_version}"
 
 # [[tool.tbump.file]]
-# src = "jupyterhub_user_groups/_version.py"
+# src = "jupyterhub_groups_exporter/_version.py"
