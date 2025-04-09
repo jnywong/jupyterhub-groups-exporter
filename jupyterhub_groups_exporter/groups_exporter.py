@@ -89,9 +89,11 @@ def main():
 
     start_http_server(args.port)
 
-    # Set up a periodic callback to update the user groups
     loop = IOLoop.current()
     callback =  partial(get_user_groups, hub_url)
+    # Set up immediate one-off callback to get user groups
+    loop.add_callback(callback)
+    # Set up a periodic callback to update the user groups
     pc = PeriodicCallback(callback, args.interval * 60 * 1000)  # convert to milliseconds
     pc.start()
     try:
