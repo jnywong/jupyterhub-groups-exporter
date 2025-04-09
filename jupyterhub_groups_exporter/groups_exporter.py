@@ -27,11 +27,7 @@ USER_GROUP = Gauge(
 
 def get_service_token():
     """Get the service token"""
-    # FIXME: use path of where JupyterHub is running
-    token_file = Path(__file__).parent.parent.joinpath("service-token")
-    logger.info(f"Loading token from {token_file}")
-    with token_file.open("r") as f:
-        token = f.read().strip()
+    token = os.environ.get("JUPYTERHUB_API_TOKEN")
     return token
 
 
