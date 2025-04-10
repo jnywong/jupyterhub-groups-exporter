@@ -3,7 +3,6 @@ Prometheus user groups exported by JupyterHub.
 """
 
 import argparse
-import time
 import os
 import json
 import logging
