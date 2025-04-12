@@ -45,7 +45,7 @@ else:
         f.write(token)
 
 service_port = 9090
-service_interval = 0.25  # minutes
+service_interval = 10
 c.JupyterHub.services = [
     {
         "name": "groups-exporter",
@@ -57,7 +57,7 @@ c.JupyterHub.services = [
             "jupyterhub_groups_exporter.groups_exporter",
             "--port",
             f"{service_port}",
-            "--interval",
+            "--update_exporter_interval",
             f"{service_interval}",
         ],
     },

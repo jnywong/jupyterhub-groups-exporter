@@ -15,22 +15,6 @@ from functools import partial
 
 logger = logging.getLogger(__name__)
 
-metrics_prefix = os.getenv('JUPYTERHUB_METRICS_PREFIX', 'jupyterhub')
-
-USER_GROUP = Gauge(
-    'user_group',
-    'Get user group memberships',
-    ['user', 'user_group'],
-    namespace=metrics_prefix,
-)
-
-
-def get_service_token():
-    """Get the service token"""
-    token = os.environ.get("JUPYTERHUB_API_TOKEN")
-    return token
-
-
 async def api_request(hub_url, path, token=None, parse_json=True, **kwargs):
     """Make an API request to the Hub, parsing JSON responses"""
     hub_url = hub_url.rstrip("/")
@@ -54,11 +38,16 @@ async def api_request(hub_url, path, token=None, parse_json=True, **kwargs):
             return None
 
 
-async def get_user_groups(hub_url, **kwargs):
+async def get_user_groups(hub_url, token, metrics_prefix, **kwargs):
     """
     Get the user groups from the JupyterHub API
     """
-    token = get_service_token()
+    USER_GROUP = Gauge(
+    'user_group',
+    'Get user group memberships',
+    ['user', 'user_group'],
+    namespace=metrics_prefix,
+)
     response = await api_request(
         hub_url,
         path="groups",
@@ -72,31 +61,53 @@ async def get_user_groups(hub_url, **kwargs):
 
 
 def main():
-    argparser = argparse.ArgumentParser(description="User groups exporter")
+    argparser = argparse.ArgumentParser(description="JupyterHub user groups exporter for Prometheus.")
     argparser.add_argument(
         "--port",
         default=9090,
         type=int,
-        help="Port to listen on",
+        help="Port to listen on for the groups exporter.",
     )
     argparser.add_argument(
-        "--interval",
-        default=60,
-        type=float,
-        help="Interval to update user groups (minutes)",
+        "--update_exporter_interval",
+        default=3600,
+        type=int,
+        help="Time interval between each update of the JupyterHub groups exporter (seconds).",
+    )
+    argparser.add_argument(
+        "--hub_url",
+        default="http://127.0.0.1:8000",
+        type=str,
+        help="JupyterHub URL.",
+    )
+    argparser.add_argument(
+        "--api_token",
+        default=os.environ.get("JUPYTERHUB_API_TOKEN"),
+        type=str,
+        help="Token to talk to the JupyterHub API.",
+    )
+    argparser.add_argument(
+        "--jupyterhub_metrics_prefix",
+        default=os.environ.get("JUPYTERHUB_METRICS_PREFIX", "jupyterhub"),
+        type=str,
+        help="Prefix for the JupyterHub metrics for Prometheus.",
+    )
+    argparser.add_argument(
+        "--jupyterhub_service_prefix",
+        default=os.environ.get("JUPYTERHUB_SERVICE_PREFIX", "jupyterhub"),
+        type=str,
+        help="Prometheus prefix/namespace for JupyterHub metrics.",
     )
     args = argparser.parse_args()
-
-    hub_url = "http://127.0.0.1:8000"
 
     start_http_server(args.port)
 
     loop = IOLoop.current()
-    callback =  partial(get_user_groups, hub_url)
+    callback =  partial(get_user_groups, args.hub_url, args.api_token, args.metrics_prefix)
     # Set up immediate one-off callback to get user groups
     loop.add_callback(callback)
     # Set up a periodic callback to update the user groups
-    pc = PeriodicCallback(callback, args.interval * 60 * 1000)  # convert to milliseconds
+    pc = PeriodicCallback(callback, args.update_exporter_interval * 1000)  # convert to milliseconds
     pc.start()
     try:
         loop.start()
