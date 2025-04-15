@@ -38,16 +38,11 @@ async def api_request(hub_url, path, token=None, parse_json=True, **kwargs):
             return None
 
 
-async def get_user_groups(hub_url, token, metrics_prefix, **kwargs):
+async def update_user_group_info(hub_url, token, USER_GROUP, **kwargs):
     """
     Get the user groups from the JupyterHub API
     """
-    USER_GROUP = Gauge(
-    'user_group',
-    'Get user group memberships',
-    ['user', 'user_group'],
-    namespace=metrics_prefix,
-)
+
     response = await api_request(
         hub_url,
         path="groups",
@@ -57,7 +52,9 @@ async def get_user_groups(hub_url, token, metrics_prefix, **kwargs):
         USER_GROUP.clear()  # Clear previous metrics
         for group in response:
             for user in group["users"]:
-                USER_GROUP.labels(user_group=f"{group['name']}", user=f"{user}").set(1)
+                USER_GROUP.labels(usergroup=f"{group['name']}", username=f"{user}").set(1)
+    else:
+        logger.error("Failed to fetch a response for user group info from JupyterHub API.")
 
 
 def main():
@@ -90,20 +87,22 @@ def main():
         "--jupyterhub_metrics_prefix",
         default=os.environ.get("JUPYTERHUB_METRICS_PREFIX", "jupyterhub"),
         type=str,
-        help="Prefix for the JupyterHub metrics for Prometheus.",
+        help="Prefix/namespace for the JupyterHub metrics for Prometheus.",
     )
-    argparser.add_argument(
-        "--jupyterhub_service_prefix",
-        default=os.environ.get("JUPYTERHUB_SERVICE_PREFIX", "jupyterhub"),
-        type=str,
-        help="Prometheus prefix/namespace for JupyterHub metrics.",
-    )
+
     args = argparser.parse_args()
+
+    USER_GROUP = Gauge(
+    'user_group_info',
+    'Username and user group membership information.',
+    ['username', 'usergroup'],
+    namespace=args.jupyterhub_metrics_prefix,
+    )
 
     start_http_server(args.port)
 
     loop = IOLoop.current()
-    callback =  partial(get_user_groups, args.hub_url, args.api_token, args.metrics_prefix)
+    callback =  partial(update_user_group_info, args.hub_url, args.api_token, USER_GROUP)
     # Set up immediate one-off callback to get user groups
     loop.add_callback(callback)
     # Set up a periodic callback to update the user groups
