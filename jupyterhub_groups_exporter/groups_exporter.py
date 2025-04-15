@@ -15,13 +15,16 @@ from functools import partial
 
 logger = logging.getLogger(__name__)
 
-async def api_request(hub_url, path, token=None, parse_json=True, **kwargs):
-    """Make an API request to the Hub, parsing JSON responses"""
+
+async def update_user_group_info(hub_url, token, USER_GROUP, **kwargs):
+    """
+    Get the user groups from the JupyterHub API
+    """
     hub_url = hub_url.rstrip("/")
     headers = kwargs.setdefault("headers", {})
     headers["Authorization"] = f"token {token}"
 
-    path = path.lstrip("/")
+    path = "groups"
     url = f"{hub_url}/hub/api/{path}"
     logger.info(f"api_request: {url}, {kwargs}")
     client = AsyncHTTPClient()
@@ -30,24 +33,11 @@ async def api_request(hub_url, path, token=None, parse_json=True, **kwargs):
     except Exception as e:
         logger.info(f"Error fetching {url}: {e}")
     else:
-        if not parse_json:
-            return resp
         if resp.body:
-            return json.loads(resp.body.decode("utf8"))
+            response = json.loads(resp.body.decode("utf8"))
         else:
-            return None
+            logger.error(f"Empty response from {url}")
 
-
-async def update_user_group_info(hub_url, token, USER_GROUP, **kwargs):
-    """
-    Get the user groups from the JupyterHub API
-    """
-
-    response = await api_request(
-        hub_url,
-        path="groups",
-        token=token,
-    )
     if response:
         USER_GROUP.clear()  # Clear previous metrics
         for group in response:
