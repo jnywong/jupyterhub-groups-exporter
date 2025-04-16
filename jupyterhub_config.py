@@ -1,9 +1,16 @@
 import pathlib
 import secrets
 import sys
-import os
 
 c = get_config()  # noqa
+
+n_users = 5
+c.Authenticator.allowed_users = {f"user-{i}" for i in range(n_users)}
+c.JupyterHub.load_groups = {
+    'group-0': {
+        'users': list(c.Authenticator.allowed_users),
+    },
+}
 
 c.Authenticator.admin_users = {'admin'}
 c.JupyterHub.authenticator_class = "dummy"
@@ -37,21 +44,21 @@ else:
     with token_file.open("w") as f:
         f.write(token)
 
-service_port = 9090
-service_interval = 1  # minutes
+jupyterhub_groups_exporter_port = 9090
+jupyterhub_groups_exporter_interval = 10
 c.JupyterHub.services = [
     {
         "name": "groups-exporter",
         "api_token": token,
-        "url": f"http://{c.JupyterHub.ip}:{service_port}",
+        "url": f"http://{c.JupyterHub.ip}:{jupyterhub_groups_exporter_port}",
         "command": [
             sys.executable,
             "-m",
             "jupyterhub_groups_exporter.groups_exporter",
             "--port",
-            f"{service_port}",
-            "--interval",
-            f"{service_interval}",
+            f"{jupyterhub_groups_exporter_port}",
+            "--update_exporter_interval",
+            f"{jupyterhub_groups_exporter_interval}",
         ],
     },
 ]
