@@ -6,48 +6,37 @@ import argparse
 import os
 import json
 import logging
+import asyncio
+import aiohttp
 
 from prometheus_client import Gauge, start_http_server
-from tornado.httpclient import AsyncHTTPClient
-from tornado.ioloop import IOLoop, PeriodicCallback
-from functools import partial
-
 
 logger = logging.getLogger(__name__)
 
 
-async def update_user_group_info(hub_url, token, USER_GROUP, **kwargs):
+async def update_user_group_info(session, headers, hub_url, USER_GROUP):
     """
     Get the user groups from the JupyterHub API
     """
-    hub_url = hub_url.rstrip("/")
-    headers = kwargs.setdefault("headers", {})
-    headers["Authorization"] = f"token {token}"
-
     path = "groups"
     url = f"{hub_url}/hub/api/{path}"
-    logger.info(f"api_request: {url}, {kwargs}")
-    client = AsyncHTTPClient()
-    try:
-        resp = await client.fetch(url, **kwargs)
-    except Exception as e:
-        logger.info(f"Error fetching {url}: {e}")
-    else:
-        if resp.body:
-            response = json.loads(resp.body.decode("utf8"))
+
+    async with session.get(url, headers=headers) as response:
+        if response.status == 200:
+            try:
+                data = await response.json()
+                logger.info(f"api_response: {data}")
+                USER_GROUP.clear()  # Clear previous metrics
+                for group in data:
+                    for user in group["users"]:
+                        USER_GROUP.labels(usergroup=f"{group['name']}", username=f"{user}").set(1)
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to decode JSON response: {e}")
         else:
-            logger.error(f"Empty response from {url}")
-
-    if response:
-        USER_GROUP.clear()  # Clear previous metrics
-        for group in response:
-            for user in group["users"]:
-                USER_GROUP.labels(usergroup=f"{group['name']}", username=f"{user}").set(1)
-    else:
-        logger.error("Failed to fetch a response for user group info from JupyterHub API.")
+            logger.error(f"Failed to fetch user group info from JupyterHub API. Status code: {response.status}")
 
 
-def main():
+async def main():
     argparser = argparse.ArgumentParser(description="JupyterHub user groups exporter for Prometheus.")
     argparser.add_argument(
         "--port",
@@ -91,18 +80,13 @@ def main():
 
     start_http_server(args.port)
 
-    loop = IOLoop.current()
-    callback =  partial(update_user_group_info, args.hub_url, args.api_token, USER_GROUP)
-    # Set up immediate one-off callback to get user groups
-    loop.add_callback(callback)
-    # Set up a periodic callback to update the user groups
-    pc = PeriodicCallback(callback, args.update_exporter_interval * 1000)  # convert to milliseconds
-    pc.start()
-    try:
-        loop.start()
-    except KeyboardInterrupt:
-        pass
+    headers = {"Authorization": f"token {args.api_token}"}
+    loop = asyncio.get_event_loop()
+    async with aiohttp.ClientSession() as session:
+        while True:
+            response = await update_user_group_info(session, headers, args.hub_url, USER_GROUP)
+            await asyncio.sleep(args.update_exporter_interval)
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
