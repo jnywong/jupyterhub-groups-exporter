@@ -10,23 +10,23 @@ import asyncio
 import aiohttp
 
 from prometheus_client import Gauge, start_http_server
+from yarl import URL
+
 
 logger = logging.getLogger(__name__)
 
 
 async def update_user_group_info(session, headers, hub_url, USER_GROUP):
     """
-    Get the user groups from the JupyterHub API
+    Update the prometheus exporter with user group memberships from the JupyterHub API.
     """
-    path = "groups"
-    url = f"{hub_url}/hub/api/{path}"
+    url = URL(f"{hub_url}").with_path("hub/api/groups")
 
     async with session.get(url, headers=headers) as response:
         if response.status == 200:
             try:
                 data = await response.json()
-                logger.info(f"api_response: {data}")
-                USER_GROUP.clear()  # Clear previous metrics
+                USER_GROUP.clear()  # Clear previous prometheus metrics
                 for group in data:
                     for user in group["users"]:
                         USER_GROUP.labels(usergroup=f"{group['name']}", username=f"{user}").set(1)
@@ -73,7 +73,7 @@ async def main():
 
     USER_GROUP = Gauge(
     'user_group_info',
-    'Username and user group membership information.',
+    'JupyterHub username and user group membership information.',
     ['username', 'usergroup'],
     namespace=args.jupyterhub_metrics_prefix,
     )
@@ -84,7 +84,7 @@ async def main():
     loop = asyncio.get_event_loop()
     async with aiohttp.ClientSession() as session:
         while True:
-            response = await update_user_group_info(session, headers, args.hub_url, USER_GROUP)
+            await update_user_group_info(session, headers, args.hub_url, USER_GROUP)
             await asyncio.sleep(args.update_exporter_interval)
 
 
