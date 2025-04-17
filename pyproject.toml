@@ -26,7 +26,6 @@ classifiers = [
 dependencies = [
     # NOTE: If lower bounds are updated, also update our test for the lower
     #       bounds in .github/workflows/test.yaml.
-    "jupyterhub>=5.0.0",
     "aiohttp>=3.11.0",
     "asyncio>=3.4.0",
 ]
@@ -34,6 +33,7 @@ dynamic = ["version"]
 
 [project.optional-dependencies]
 test = [
+    "jupyterhub>=5.0.0",
     "jupyter_server>=2.0.0",
     "psutil>=7.0.0",
     "pycurl>=7.43.0",
