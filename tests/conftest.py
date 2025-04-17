@@ -1,6 +1,5 @@
 import aiohttp
 import inspect
-import json
 import logging
 import os
 import psutil
@@ -97,9 +96,11 @@ async def api_request(hub_url:str, path:str, token:str=None, parse_json:bool=Tru
                         return await resp.json()
                     else:
                         return await resp.text()
-                except json.JSONDecodeError as e:
-                    logger.error(f"Failed to decode JSON response: {e}")
+                except:
+                    logger.error(f"Failed to decode response.")
                     raise
+            else:
+                logger.error(f"Response code: {resp.status}")
 
 
 @pytest.fixture
