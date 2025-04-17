@@ -1,20 +1,21 @@
-import os
-import json
+import aiohttp
 import inspect
-import asyncio
-import secrets
-import shutil
-import time
+import json
+import logging
+import os
 import psutil
 import pytest
-import logging
+import secrets
+import shutil
+import signal
+import time
 
 from pathlib import Path
 from unittest import mock
 from functools import partial
 from tempfile import TemporaryDirectory
 from subprocess import Popen
-from tornado.httpclient import AsyncHTTPClient, HTTPClient
+from yarl import URL
 
 logger = logging.getLogger(__name__)
 
@@ -42,23 +43,14 @@ def admin_token():
 
 
 @pytest.fixture(scope="session")
-def groups_token():
-    """Generate a token to use for groups exporter service requests"""
-    token = secrets.token_hex(16)
-    # jupyterhub subprocess loads this from the environment
-    with mock.patch.dict(os.environ, {"TEST_GROUPS_TOKEN": token}):
-        yield token
-
-
-@pytest.fixture(scope="session")
 def hub_url():
     # hardcoded for now, but might want to override
     return "http://127.0.0.1:8000"
 
 
 @pytest.fixture(scope="session")
-def hub(hub_url, request, admin_token):
-    """Start JupyterHub, set up to use our tokens"""
+async def hub(hub_url, request, admin_token):
+    """Start JupyterHub, set up to use admin and service tokens"""
     jupyterhub_config = Path.cwd().joinpath("tests/jupyterhub_config.py")
     with TemporaryDirectory() as td:
         shutil.copy(jupyterhub_config, Path(td).joinpath("jupyterhub_config.py"))
@@ -67,9 +59,7 @@ def hub(hub_url, request, admin_token):
         def cleanup():
             if hub.poll() is None:
                 try:
-                    for p in psutil.Process(hub.pid).children():
-                        logger.info(f"terminating {p}")
-                        p.terminate()
+                    kill_proc_tree(hub.pid)
                 except psutil.ProcessLookupError:
                     pass
             logger.info("terminating hub")
@@ -80,7 +70,8 @@ def hub(hub_url, request, admin_token):
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
             try:
-                HTTPClient().fetch(hub_url + "/hub/api")
+                await api_request(hub_url=hub_url, path="hub/api/info", token=admin_token)
+                logger.info("hub started")
             except Exception as e:
                 logger.info(f"hub: {e}")
                 if hub.poll() is not None:
@@ -93,25 +84,48 @@ def hub(hub_url, request, admin_token):
         yield hub
 
 
-async def api_request(hub_url, path, token=None, parse_json=True, **kwargs):
+async def api_request(hub_url:str, path:str, token:str=None, parse_json:bool=True):
     """Make an API request to the Hub, parsing JSON responses"""
-    hub_url = hub_url.rstrip("/")
-    headers = kwargs.setdefault("headers", {})
-    headers["Authorization"] = f"token {token}"
-
-    path = path.lstrip("/")
-    url = f"{hub_url}/hub/api/{path}"
-    logger.info(f"api_request: {url}, {kwargs}")
-    resp = await AsyncHTTPClient().fetch(url, **kwargs)
-    if not parse_json:
-        return resp
-    if resp.body:
-        return json.loads(resp.body.decode("utf8"))
-    else:
-        return None
+    headers = {"Authorization": f"token {token}"}
+    hub_url = URL(hub_url)
+    url = hub_url.with_path(f"{path}")
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, headers=headers) as resp:
+            if resp.status == 200:
+                try:
+                    if parse_json:
+                        return await resp.json()
+                    else:
+                        return await resp.text()
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to decode JSON response: {e}")
+                    raise
 
 
 @pytest.fixture
 def admin_request(hub, hub_url, admin_token):
     """make an API request to a path with an admin token"""
     return partial(api_request, hub_url, token=admin_token)
+
+
+def kill_proc_tree(pid, sig=signal.SIGKILL, include_parent=True,
+                   timeout=None, on_terminate=None):
+    """Kill a process tree (including grandchildren) with signal
+    "sig" and return a (gone, still_alive) tuple.
+    "on_terminate", if specified, is a callback function which is
+    called as soon as a child terminates.
+    """
+    assert pid != os.getpid(), "won't kill myself"
+    parent = psutil.Process(pid)
+    children = parent.children(recursive=True)
+    if include_parent:
+        children.append(parent)
+    for p in children:
+        try:
+            p.send_signal(sig)
+            logger.info(f"terminating {p}")
+        except psutil.NoSuchProcess:
+            pass
+    gone, alive = psutil.wait_procs(children, timeout=timeout,
+                                    callback=on_terminate)
+    logger.info(f"{len(gone)} processes killed, {len(alive)} still alive.")

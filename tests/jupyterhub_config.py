@@ -1,12 +1,12 @@
 import pathlib
 import secrets
-import sys
 import os
+import sys
 
 c = get_config()  # noqa
 
 n_users = 5
-c.Authenticator.allowed_users = {f"test-{i}" for i in range(n_users)}
+c.Authenticator.allowed_users = {f"user-{i}" for i in range(n_users)}
 c.JupyterHub.load_groups = {
     'group-0': {
         'users': list(c.Authenticator.allowed_users),
@@ -28,9 +28,9 @@ c.JupyterHub.load_roles = [
     {
         "name": "pytest",
         "scopes": [
-            "servers",
-            "admin:users",
             "read:hub",
+            "users",
+            "groups",
         ],
         "services": ["pytest"],
     },
@@ -44,8 +44,18 @@ c.JupyterHub.load_roles = [
     },
 ]
 
-service_port = 9090
-service_interval = 1  # minutes
+here = pathlib.Path(__file__).parent
+token_file = here.joinpath("service-token")
+if token_file.exists():
+    with token_file.open("r") as f:
+        token = f.read()
+else:
+    token = secrets.token_hex(16)
+    with token_file.open("w") as f:
+        f.write(token)
+
+jupyterhub_groups_exporter_port = 9090
+jupyterhub_groups_exporter_interval = 10
 c.JupyterHub.services = [
     {
         "name": "pytest",
@@ -53,16 +63,16 @@ c.JupyterHub.services = [
     },
     {
         "name": "groups-exporter",
-        # "api_token": os.environ["TEST_GROUPS_TOKEN"],
-        "url": f"http://{c.JupyterHub.ip}:{service_port}",
+        "api_token": token,
+        "url": f"http://{c.JupyterHub.ip}:{jupyterhub_groups_exporter_port}",
         "command": [
             sys.executable,
             "-m",
             "jupyterhub_groups_exporter.groups_exporter",
             "--port",
-            f"{service_port}",
-            "--interval",
-            f"{service_interval}",
+            f"{jupyterhub_groups_exporter_port}",
+            "--update_exporter_interval",
+            f"{jupyterhub_groups_exporter_interval}",
         ],
     },
 ]
