@@ -1,4 +1,4 @@
-FROM ubuntu:24.04 AS dev
+FROM ubuntu:24.04 AS base
 
 RUN apt-get update > /dev/null && \
     apt-get install --yes python3 python3-pip python3-venv > /dev/null && \
@@ -13,6 +13,14 @@ COPY . /opt/jupyterhub_groups_exporter
 WORKDIR /opt/jupyterhub_groups_exporter
 
 RUN pip install -e .
+
+FROM base AS dev
+
 RUN pip install  -e ".[test]"
 
 CMD ["python", "-m", "jupyterhub_groups_exporter.groups_exporter", "--update_exporter_interval", "10"]
+
+FROM base AS prod
+
+CMD ["python", "-m", "jupyterhub_groups_exporter.groups_exporter", "--update_exporter_interval", "3600"]
+
