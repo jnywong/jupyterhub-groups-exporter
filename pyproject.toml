@@ -28,6 +28,7 @@ dependencies = [
     #       bounds in .github/workflows/test.yaml.
     "aiohttp>=3.11.0",
     "asyncio>=3.4.0",
+    "prometheus_client>=0.21.0",
 ]
 dynamic = ["version"]
 
