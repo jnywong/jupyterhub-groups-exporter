@@ -1,13 +1,13 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "jupyerhub-groups-exporter.fullname" . }}
+  name: {{ include "jupyterhub-groups-exporter.fullname" . }}
   labels:
-    {{- include "jupyerhub-groups-exporter.labels" . | nindent 4 }}
+    {{- include "jupyterhub-groups-exporter.labels" . | nindent 4 }}
 spec:
   selector:
     matchLabels:
-      {{- include "jupyerhub-groups-exporter.selectorLabels" . | nindent 6 }}
+      {{- include "jupyterhub-groups-exporter.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -15,7 +15,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "jupyerhub-groups-exporter.labels" . | nindent 8 }}
+        {{- include "jupyterhub-groups-exporter.labels" . | nindent 8 }}
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
