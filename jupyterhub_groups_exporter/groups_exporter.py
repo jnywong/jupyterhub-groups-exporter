@@ -33,7 +33,7 @@ async def update_user_group_info(session: aiohttp.ClientSession, headers: dict, 
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to decode JSON response: {e}")
         else:
-            logger.error(f"Failed to fetch user group info from JupyterHub API. Status code: {response.status}")
+            logger.error(f"Failed to fetch user group info from {url}. Status code: {response.status}")
 
 
 async def main():
@@ -52,9 +52,9 @@ async def main():
     )
     argparser.add_argument(
         "--hub_url",
-        default="http://127.0.0.1:8000",
+        default=f"http://{os.environ.get('HUB_SERVICE_HOST')}:{os.environ.get('HUB_SERVICE_PORT')}",
         type=str,
-        help="JupyterHub URL.",
+        help="JupyterHub service URL, e.g. http://localhost:8000 for local development.",
     )
     argparser.add_argument(
         "--api_token",

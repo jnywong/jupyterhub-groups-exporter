@@ -2,12 +2,11 @@ replicas: 1
 
 image:
   repository: quay.io/2i2c/jupyterhub-groups-exporter
-  tag: "w-entrypoint"
+  tag: "latest"
 
 config:
   groupsExporter:
     update_exporter_interval: 10
-    hub_url: "http://10.98.187.43:8081"
 
 extraEnv:
   - name: JUPYTERHUB_API_TOKEN
