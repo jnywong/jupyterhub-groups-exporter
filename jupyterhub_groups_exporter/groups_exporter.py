@@ -30,6 +30,7 @@ async def update_user_group_info(session: aiohttp.ClientSession, headers: dict, 
                 for group in data:
                     for user in group["users"]:
                         USER_GROUP.labels(usergroup=f"{group['name']}", username=f"{user}").set(1)
+                logger.info(f"Updated user group info from {url}.")
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to decode JSON response: {e}")
         else:
@@ -79,6 +80,7 @@ async def main():
     )
 
     start_http_server(args.port)
+    logger.info(f"Starting JupyterHub user groups Prometheus exporter on port {args.port} with an update interval of {args.update_exporter_interval} seconds.")
 
     headers = {"Authorization": f"token {args.api_token}"}
     loop = asyncio.get_event_loop()
