@@ -14,6 +14,7 @@ from yarl import URL
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 async def update_user_group_info(session: aiohttp.ClientSession, headers: dict, hub_url: str, USER_GROUP: Gauge):
