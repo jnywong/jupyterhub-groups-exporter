@@ -25,11 +25,13 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
-        - name: {{ .Chart.Name }}
+        - name: jupyterhub-groups-exporter
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python", "-m", "jupyterhub_groups_exporter.groups_exporter"]
+          args: ["--port", "{{ .Values.config.groupsExporter.port }}", "--update_exporter_interval", "{{ .Values.config.groupsExporter.update_exporter_interval }}", "--hub_url", "{{ .Values.config.groupsExporter.hub_url }}", "--api_token", "{{ .Values.config.groupsExporter.api_token }}"]
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}

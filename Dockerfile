@@ -1,4 +1,4 @@
-FROM ubuntu:24.04 AS base
+FROM ubuntu:24.04
 
 RUN apt-get update > /dev/null && \
     apt-get install --yes python3 python3-pip python3-venv tini > /dev/null && \
