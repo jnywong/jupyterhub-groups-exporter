@@ -14,6 +14,8 @@ extraEnv:
       secretKeyRef:
         name: hub
         key: hub.services.jupyterhub-groups-exporter.apiToken
+  - name: PYTHONUNBUFFERED
+    value: "1"
 
 ingress:
   enabled: false

@@ -33,7 +33,7 @@ async def update_user_group_info(session: aiohttp.ClientSession, headers: dict, 
                 for group in data:
                     for user in group["users"]:
                         USER_GROUP.labels(usergroup=f"{group['name']}", username=f"{user}").set(1)
-                logger.info(f"Updated user group info from {url}.")
+                logger.info(f"Updated user_group_info with data from API call to {url}.")
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to decode JSON response: {e}")
         else:
