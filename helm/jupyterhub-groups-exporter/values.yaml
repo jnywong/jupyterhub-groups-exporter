@@ -1,5 +1,3 @@
-replicas: 1
-
 config:
   groupsExporter:
     update_exporter_interval: 60
@@ -17,8 +15,6 @@ image:
   repository: quay.io/2i2c/jupyterhub-groups-exporter
   tag: "latest"
 
-ingress:
-  enabled: false
 
 service:
   type: ClusterIP
