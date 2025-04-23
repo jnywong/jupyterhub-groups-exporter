@@ -17,6 +17,5 @@ COPY jupyterhub_groups_exporter /opt/jupyterhub_groups_exporter/jupyterhub_group
 WORKDIR /opt/jupyterhub_groups_exporter
 
 RUN pip install -e .
-RUN pip install  -e ".[test]"
 
 ENTRYPOINT ["tini", "--"]
