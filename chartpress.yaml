@@ -14,7 +14,7 @@ charts:
     chartPath: helm/jupyterhub-groups-exporter
     imagePrefix: quay.io/2i2c/
     # Set dev version by taking latest tag and incrementing patch
-    baseVersion: minor
+    baseVersion: patch
 
     repo:
       git: 2i2c-org/jupyterhub-groups-exporter
