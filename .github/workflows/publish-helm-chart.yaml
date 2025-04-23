@@ -2,6 +2,7 @@ name: Publish helm chart
 
 # Trigger the workflow on pushed tags or commits to main branch.
 on:
+  workflow_dispatch:
   push:
     paths-ignore:
       - "docs/**"
