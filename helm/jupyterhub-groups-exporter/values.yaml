@@ -13,7 +13,7 @@ extraEnv:
 
 image:
   repository: quay.io/2i2c/jupyterhub-groups-exporter
-  tag: "latest"
+  tag: "set-by-chartpress"
 
 
 service:
