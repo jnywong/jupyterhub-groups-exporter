@@ -16,6 +16,5 @@ spec:
       protocol: TCP
       name: http
   selector:
-    matchLabels:
       app.kubernetes.io/name: jupyterhub-groups-exporter
       app.kubernetes.io/instance: {{ .Release.Name }}
