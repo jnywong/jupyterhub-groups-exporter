@@ -1,12 +1,8 @@
 replicas: 1
 
-image:
-  repository: quay.io/2i2c/jupyterhub-groups-exporter
-  tag: "latest"
-
 config:
   groupsExporter:
-    update_exporter_interval: 10
+    update_exporter_interval: 60
 
 extraEnv:
   - name: JUPYTERHUB_API_TOKEN
@@ -16,6 +12,10 @@ extraEnv:
         key: hub.services.jupyterhub-groups-exporter.apiToken
   - name: PYTHONUNBUFFERED
     value: "1"
+
+image:
+  repository: quay.io/2i2c/jupyterhub-groups-exporter
+  tag: "latest"
 
 ingress:
   enabled: false
