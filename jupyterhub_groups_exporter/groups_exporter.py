@@ -14,7 +14,10 @@ from yarl import URL
 
 
 logger = logging.getLogger(__name__)
-
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s %(levelname)-8s %(message)s',
+                    datefmt='%Y-%m-%d %H:%M',
+)
 
 async def update_user_group_info(session: aiohttp.ClientSession, headers: dict, hub_url: str, USER_GROUP: Gauge):
     """
@@ -30,10 +33,11 @@ async def update_user_group_info(session: aiohttp.ClientSession, headers: dict, 
                 for group in data:
                     for user in group["users"]:
                         USER_GROUP.labels(usergroup=f"{group['name']}", username=f"{user}").set(1)
+                logger.info(f"Updated user_group_info with data from API call to {url}.")
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to decode JSON response: {e}")
         else:
-            logger.error(f"Failed to fetch user group info from JupyterHub API. Status code: {response.status}")
+            logger.error(f"Failed to fetch user group info from {url}. Status code: {response.status}")
 
 
 async def main():
@@ -52,9 +56,9 @@ async def main():
     )
     argparser.add_argument(
         "--hub_url",
-        default="http://127.0.0.1:8000",
+        default=f"http://{os.environ.get('HUB_SERVICE_HOST')}:{os.environ.get('HUB_SERVICE_PORT')}",
         type=str,
-        help="JupyterHub URL.",
+        help="JupyterHub service URL, e.g. http://localhost:8000 for local development.",
     )
     argparser.add_argument(
         "--api_token",
@@ -79,6 +83,7 @@ async def main():
     )
 
     start_http_server(args.port)
+    logger.info(f"Starting JupyterHub user groups Prometheus exporter on port {args.port} with an update interval of {args.update_exporter_interval} seconds.")
 
     headers = {"Authorization": f"token {args.api_token}"}
     loop = asyncio.get_event_loop()
