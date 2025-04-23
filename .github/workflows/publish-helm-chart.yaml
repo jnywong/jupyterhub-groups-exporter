@@ -55,4 +55,6 @@ jobs:
 
       - name: Run chartpress
         run: chartpress --push --publish-chart
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           
