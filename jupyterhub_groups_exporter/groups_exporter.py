@@ -4,11 +4,11 @@ Prometheus user groups exported by JupyterHub.
 
 import argparse
 import asyncio
-import json
 import logging
 import os
 
 import aiohttp
+import backoff
 from prometheus_client import Gauge, start_http_server
 from yarl import URL
 
@@ -20,6 +20,7 @@ logging.basicConfig(
 )
 
 
+@backoff.on_exception(backoff.expo, aiohttp.ClientError, max_tries=8, logger=logger)
 async def update_user_group_info(
     session: aiohttp.ClientSession, hub_url: URL, USER_GROUP: Gauge
 ):
@@ -29,24 +30,14 @@ async def update_user_group_info(
     url = hub_url / "hub/api/groups"
 
     async with session.get(url) as response:
-        if response.status == 200:
-            try:
-                data = await response.json()
-                USER_GROUP.clear()  # Clear previous prometheus metrics
-                for group in data:
-                    for user in group["users"]:
-                        USER_GROUP.labels(
-                            usergroup=f"{group['name']}", username=f"{user}"
-                        ).set(1)
-                logger.info(
-                    f"Updated user_group_info with data from API call to {url}."
+        data = await response.json()
+        USER_GROUP.clear()  # Clear previous prometheus metrics
+        for group in data:
+            for user in group["users"]:
+                USER_GROUP.labels(usergroup=f"{group['name']}", username=f"{user}").set(
+                    1
                 )
-            except json.JSONDecodeError as e:
-                logger.error(f"Failed to decode JSON response: {e}")
-        else:
-            logger.error(
-                f"Failed to fetch user group info from {url}. Status code: {response.status}"
-            )
+        logger.info(f"Updated user_group_info with data from API call to {url}.")
 
 
 async def main():
@@ -100,6 +91,7 @@ async def main():
 
     hub_url = URL(args.hub_url)
     headers = {"Authorization": f"token {args.api_token}"}
+
     asyncio.get_event_loop()
     async with aiohttp.ClientSession(headers=headers) as session:
         while True:
