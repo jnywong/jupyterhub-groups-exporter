@@ -1,3 +1,7 @@
+"""
+NOTE: This JupyterHub configuration file is included in this repo for local development.
+"""
+
 import pathlib
 import secrets
 import sys
