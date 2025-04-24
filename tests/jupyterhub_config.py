@@ -1,6 +1,6 @@
+import os
 import pathlib
 import secrets
-import os
 import sys
 
 c = get_config()  # noqa
@@ -8,18 +8,18 @@ c = get_config()  # noqa
 n_users = 5
 c.Authenticator.allowed_users = {f"user-{i}" for i in range(n_users)}
 c.JupyterHub.load_groups = {
-    'group-0': {
-        'users': list(c.Authenticator.allowed_users),
+    "group-0": {
+        "users": list(c.Authenticator.allowed_users),
     },
 }
 
-c.Authenticator.admin_users = {'admin'}
+c.Authenticator.admin_users = {"admin"}
 c.JupyterHub.authenticator_class = "dummy"
 c.JupyterHub.spawner_class = "simple"
 
 c.JupyterHub.last_activity_interval = 3
-c.JupyterHub.ip = '127.0.0.1'
-c.JupyterHub.hub_ip = '127.0.0.1'
+c.JupyterHub.ip = "127.0.0.1"
+c.JupyterHub.hub_ip = "127.0.0.1"
 c.JupyterHub.port = 8000
 c.JupyterHub.cleanup_proxy = True
 c.JupyterHub.cleanup_servers = True

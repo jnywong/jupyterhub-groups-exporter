@@ -3,23 +3,26 @@ Prometheus user groups exported by JupyterHub.
 """
 
 import argparse
-import os
+import asyncio
 import json
 import logging
-import asyncio
-import aiohttp
+import os
 
+import aiohttp
 from prometheus_client import Gauge, start_http_server
 from yarl import URL
 
-
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s %(levelname)-8s %(message)s',
-                    datefmt='%Y-%m-%d %H:%M',
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)-8s %(message)s",
+    datefmt="%Y-%m-%d %H:%M",
 )
 
-async def update_user_group_info(session: aiohttp.ClientSession, hub_url: URL, USER_GROUP: Gauge):
+
+async def update_user_group_info(
+    session: aiohttp.ClientSession, hub_url: URL, USER_GROUP: Gauge
+):
     """
     Update the prometheus exporter with user group memberships from the JupyterHub API.
     """
@@ -32,16 +35,24 @@ async def update_user_group_info(session: aiohttp.ClientSession, hub_url: URL, U
                 USER_GROUP.clear()  # Clear previous prometheus metrics
                 for group in data:
                     for user in group["users"]:
-                        USER_GROUP.labels(usergroup=f"{group['name']}", username=f"{user}").set(1)
-                logger.info(f"Updated user_group_info with data from API call to {url}.")
+                        USER_GROUP.labels(
+                            usergroup=f"{group['name']}", username=f"{user}"
+                        ).set(1)
+                logger.info(
+                    f"Updated user_group_info with data from API call to {url}."
+                )
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to decode JSON response: {e}")
         else:
-            logger.error(f"Failed to fetch user group info from {url}. Status code: {response.status}")
+            logger.error(
+                f"Failed to fetch user group info from {url}. Status code: {response.status}"
+            )
 
 
 async def main():
-    argparser = argparse.ArgumentParser(description="JupyterHub user groups exporter for Prometheus.")
+    argparser = argparse.ArgumentParser(
+        description="JupyterHub user groups exporter for Prometheus."
+    )
     argparser.add_argument(
         "--port",
         default=9090,
@@ -76,18 +87,20 @@ async def main():
     args = argparser.parse_args()
 
     USER_GROUP = Gauge(
-    'user_group_info',
-    'JupyterHub username and user group membership information.',
-    ['username', 'usergroup'],
-    namespace=args.jupyterhub_metrics_prefix,
+        "user_group_info",
+        "JupyterHub username and user group membership information.",
+        ["username", "usergroup"],
+        namespace=args.jupyterhub_metrics_prefix,
     )
 
     start_http_server(args.port)
-    logger.info(f"Starting JupyterHub user groups Prometheus exporter on port {args.port} with an update interval of {args.update_exporter_interval} seconds.")
+    logger.info(
+        f"Starting JupyterHub user groups Prometheus exporter on port {args.port} with an update interval of {args.update_exporter_interval} seconds."
+    )
 
     hub_url = URL(args.hub_url)
     headers = {"Authorization": f"token {args.api_token}"}
-    loop = asyncio.get_event_loop()
+    asyncio.get_event_loop()
     async with aiohttp.ClientSession(headers=headers) as session:
         while True:
             await update_user_group_info(session, hub_url, USER_GROUP)
