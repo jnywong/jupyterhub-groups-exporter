@@ -19,13 +19,13 @@ logging.basicConfig(level=logging.INFO,
                     datefmt='%Y-%m-%d %H:%M',
 )
 
-async def update_user_group_info(session: aiohttp.ClientSession, headers: dict, hub_url: str, USER_GROUP: Gauge):
+async def update_user_group_info(session: aiohttp.ClientSession, hub_url: URL, USER_GROUP: Gauge):
     """
     Update the prometheus exporter with user group memberships from the JupyterHub API.
     """
-    url = URL(f"{hub_url}").with_path("hub/api/groups")
+    url = hub_url / "hub/api/groups"
 
-    async with session.get(url, headers=headers) as response:
+    async with session.get(url) as response:
         if response.status == 200:
             try:
                 data = await response.json()
@@ -56,7 +56,7 @@ async def main():
     )
     argparser.add_argument(
         "--hub_url",
-        default=f"http://{os.environ.get('HUB_SERVICE_HOST')}:{os.environ.get('HUB_SERVICE_PORT')}",
+        default="http://localhost:8000",
         type=str,
         help="JupyterHub service URL, e.g. http://localhost:8000 for local development.",
     )
@@ -85,11 +85,12 @@ async def main():
     start_http_server(args.port)
     logger.info(f"Starting JupyterHub user groups Prometheus exporter on port {args.port} with an update interval of {args.update_exporter_interval} seconds.")
 
+    hub_url = URL(args.hub_url)
     headers = {"Authorization": f"token {args.api_token}"}
     loop = asyncio.get_event_loop()
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(headers=headers) as session:
         while True:
-            await update_user_group_info(session, headers, args.hub_url, USER_GROUP)
+            await update_user_group_info(session, hub_url, USER_GROUP)
             await asyncio.sleep(args.update_exporter_interval)
 
 
