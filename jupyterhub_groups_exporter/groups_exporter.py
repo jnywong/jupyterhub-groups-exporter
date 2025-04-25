@@ -70,7 +70,7 @@ async def main():
     )
     argparser.add_argument(
         "--hub_url",
-        default="http://localhost:8000",
+        default=f"http://{os.environ.get('HUB_SERVICE_HOST')}:{os.environ.get('HUB_SERVICE_PORT')}",
         type=str,
         help="JupyterHub service URL, e.g. http://localhost:8000 for local development.",
     )
