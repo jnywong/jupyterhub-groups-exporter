@@ -8,7 +8,7 @@ on:
       - "docs/**"
       - "**.md"
       - ".github/workflows/*"
-      - "!.github/workflows/publish-chart.yaml"
+      - "!.github/workflows/publish-helm-chart.yaml"
     branches:
       - "main"
     tags:
