@@ -26,7 +26,9 @@ async def fetch_page(session: aiohttp.ClientSession, hub_url: URL, path: str = F
         return await response.json()
 
 
-async def update_user_group_info(session, hub_url, USER_GROUP: Gauge):
+async def update_user_group_info(
+    session: aiohttp.ClientSession, hub_url: URL, USER_GROUP: Gauge
+):
     """
     Update the prometheus exporter with user group memberships fetched from the JupyterHub API.
     """
@@ -42,7 +44,6 @@ async def update_user_group_info(session, hub_url, USER_GROUP: Gauge):
     else:
         logger.debug("Received non-paginated data.")
         items = data
-    logger.debug(f"Received {len(items)} items of data.")
 
     USER_GROUP.clear()  # Clear previous prometheus metrics
     for group in items:
