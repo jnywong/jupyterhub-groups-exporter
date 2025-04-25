@@ -1,18 +1,21 @@
 """
-NOTE: This JupyterHub configuration file is included in this repo for local development.
+NOTE: This JupyterHub configuration file is included in this repo for local development and testing.
 """
 
+
+import os
 import pathlib
 import secrets
 import sys
 
 c = get_config()  # noqa
 
-# API page limit is 50 for users and groups endpoints. Initialize with n_users, with 1 user per group.
-n_users = 100
+n_users = 5
 c.Authenticator.allowed_users = {f"user-{i}" for i in range(n_users)}
 c.JupyterHub.load_groups = {
-    f"group-{i}": dict(users=[f"user-{i}"]) for i in range(n_users)
+    "group-0": {
+        "users": list(c.Authenticator.allowed_users),
+    },
 }
 
 c.Authenticator.admin_users = {"admin"}
@@ -27,6 +30,15 @@ c.JupyterHub.cleanup_proxy = True
 c.JupyterHub.cleanup_servers = True
 
 c.JupyterHub.load_roles = [
+    {
+        "name": "pytest",
+        "scopes": [
+            "read:hub",
+            "users",
+            "groups",
+        ],
+        "services": ["pytest"],
+    },
     {
         "name": "groups-exporter",
         "scopes": [
@@ -51,6 +63,10 @@ jupyterhub_groups_exporter_port = 9090
 jupyterhub_groups_exporter_interval = 10
 c.JupyterHub.services = [
     {
+        "name": "pytest",
+        "api_token": os.environ["TEST_ADMIN_TOKEN"],
+    },
+    {
         "name": "groups-exporter",
         "api_token": token,
         "url": f"http://{c.JupyterHub.ip}:{jupyterhub_groups_exporter_port}",
@@ -62,8 +78,6 @@ c.JupyterHub.services = [
             f"{jupyterhub_groups_exporter_port}",
             "--update_exporter_interval",
             f"{jupyterhub_groups_exporter_interval}",
-            "--log_level",
-            "DEBUG",
         ],
     },
 ]
