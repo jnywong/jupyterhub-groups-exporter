@@ -4,21 +4,20 @@ import sys
 
 c = get_config()  # noqa
 
-n_users = 5
+# API page limit is 50 for users and groups endpoints. Initialize with n_users, with 1 user per group.
+n_users = 100
 c.Authenticator.allowed_users = {f"user-{i}" for i in range(n_users)}
 c.JupyterHub.load_groups = {
-    'group-0': {
-        'users': list(c.Authenticator.allowed_users),
-    },
+    f"group-{i}": dict(users=[f"user-{i}"]) for i in range(n_users)
 }
 
-c.Authenticator.admin_users = {'admin'}
+c.Authenticator.admin_users = {"admin"}
 c.JupyterHub.authenticator_class = "dummy"
 c.JupyterHub.spawner_class = "simple"
 
 c.JupyterHub.last_activity_interval = 3
-c.JupyterHub.ip = '127.0.0.1'
-c.JupyterHub.hub_ip = '127.0.0.1'
+c.JupyterHub.ip = "127.0.0.1"
+c.JupyterHub.hub_ip = "127.0.0.1"
 c.JupyterHub.port = 8000
 c.JupyterHub.cleanup_proxy = True
 c.JupyterHub.cleanup_servers = True
@@ -59,6 +58,8 @@ c.JupyterHub.services = [
             f"{jupyterhub_groups_exporter_port}",
             "--update_exporter_interval",
             f"{jupyterhub_groups_exporter_interval}",
+            "--log_level",
+            "DEBUG",
         ],
     },
 ]
