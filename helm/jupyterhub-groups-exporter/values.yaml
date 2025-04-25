@@ -1,6 +1,7 @@
 config:
   groupsExporter:
     update_exporter_interval: 60
+    log_level: DEBUG
 
 extraEnv:
   - name: JUPYTERHUB_API_TOKEN
