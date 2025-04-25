@@ -1,7 +1,7 @@
-FROM ubuntu:24.04
+FROM python:3.13-bookworm
 
 RUN apt-get update > /dev/null && \
-    apt-get install --yes python3 python3-pip python3-venv tini > /dev/null && \
+    apt-get install --yes tini > /dev/null && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 ENV VIRTUAL_ENV=/opt/venv

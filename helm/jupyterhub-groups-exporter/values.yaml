@@ -15,7 +15,6 @@ image:
   repository: quay.io/2i2c/jupyterhub-groups-exporter
   tag: "set-by-chartpress"
 
-
 service:
   type: ClusterIP
   port: 8100
@@ -28,10 +27,6 @@ tolerations: []
 
 affinity: {}
 
-podAnnotations: {
-  prometheus.io/scrape: "true",
-}
+podAnnotations: { prometheus.io/scrape: "true" }
 
-podLabels: {
-  hub.jupyter.org/network-access-hub: "true"
-}
+podLabels: { hub.jupyter.org/network-access-hub: "true" }

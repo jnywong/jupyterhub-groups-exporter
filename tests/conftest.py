@@ -1,19 +1,19 @@
-import aiohttp
 import inspect
 import logging
 import os
-import psutil
-import pytest
 import secrets
 import shutil
 import signal
 import time
-
-from pathlib import Path
-from unittest import mock
 from functools import partial
-from tempfile import TemporaryDirectory
+from pathlib import Path
 from subprocess import Popen
+from tempfile import TemporaryDirectory
+from unittest import mock
+
+import aiohttp
+import psutil
+import pytest
 from yarl import URL
 
 logger = logging.getLogger(__name__)
@@ -69,7 +69,9 @@ async def hub(hub_url, request, admin_token):
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
             try:
-                await api_request(hub_url=hub_url, path="hub/api/info", token=admin_token)
+                await api_request(
+                    hub_url=hub_url, path="hub/api/info", token=admin_token
+                )
                 logger.info("hub started")
             except Exception as e:
                 logger.info(f"hub: {e}")
@@ -83,7 +85,9 @@ async def hub(hub_url, request, admin_token):
         yield hub
 
 
-async def api_request(hub_url:str, path:str, token:str=None, parse_json:bool=True):
+async def api_request(
+    hub_url: str, path: str, token: str = None, parse_json: bool = True
+):
     """Make an API request to the Hub, parsing JSON responses"""
     headers = {"Authorization": f"token {token}"}
     hub_url = URL(hub_url)
@@ -97,7 +101,7 @@ async def api_request(hub_url:str, path:str, token:str=None, parse_json:bool=Tru
                     else:
                         return await resp.text()
                 except:
-                    logger.error(f"Failed to decode response.")
+                    logger.error("Failed to decode response.")
                     raise
             else:
                 logger.error(f"Response code: {resp.status}")
@@ -109,8 +113,9 @@ def admin_request(hub, hub_url, admin_token):
     return partial(api_request, hub_url, token=admin_token)
 
 
-def kill_proc_tree(pid, sig=signal.SIGKILL, include_parent=True,
-                   timeout=None, on_terminate=None):
+def kill_proc_tree(
+    pid, sig=signal.SIGKILL, include_parent=True, timeout=None, on_terminate=None
+):
     """Kill a process tree (including grandchildren) with signal
     "sig" and return a (gone, still_alive) tuple.
     "on_terminate", if specified, is a callback function which is
@@ -127,6 +132,5 @@ def kill_proc_tree(pid, sig=signal.SIGKILL, include_parent=True,
             logger.info(f"terminating {p}")
         except psutil.NoSuchProcess:
             pass
-    gone, alive = psutil.wait_procs(children, timeout=timeout,
-                                    callback=on_terminate)
+    gone, alive = psutil.wait_procs(children, timeout=timeout, callback=on_terminate)
     logger.info(f"{len(gone)} processes killed, {len(alive)} still alive.")
