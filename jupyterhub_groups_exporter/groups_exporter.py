@@ -13,31 +13,42 @@ from prometheus_client import Gauge, start_http_server
 from yarl import URL
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [jupyterhub-groups-exporter] %(levelname)s: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
 
 
 @backoff.on_exception(backoff.expo, aiohttp.ClientError, max_tries=8, logger=logger)
-async def update_user_group_info(
-    session: aiohttp.ClientSession, hub_url: URL, USER_GROUP: Gauge
-):
+async def fetch_page(session: aiohttp.ClientSession, hub_url: URL, path: str = False):
     """
-    Update the prometheus exporter with user group memberships from the JupyterHub API.
+    Fetch a page from the JupyterHub API.
     """
-    url = hub_url / "hub/api/groups"
-
+    url = hub_url / path if path else hub_url
+    logger.debug(f"Fetching {url}")
     async with session.get(url) as response:
-        data = await response.json()
-        USER_GROUP.clear()  # Clear previous prometheus metrics
-        for group in data:
-            for user in group["users"]:
-                USER_GROUP.labels(usergroup=f"{group['name']}", username=f"{user}").set(
-                    1
-                )
-        logger.info(f"Updated user_group_info with data from API call to {url}.")
+        return await response.json()
+
+
+async def update_user_group_info(session, hub_url, USER_GROUP: Gauge):
+    """
+    Update the prometheus exporter with user group memberships fetched from the JupyterHub API.
+    """
+    data = await fetch_page(session, hub_url, "hub/api/groups")
+    if "_pagination" in data:
+        logger.debug(f"Received paginated data: {data['_pagination']}")
+        items = data["items"]
+        next_info = data["_pagination"]["next"]
+        while next_info:
+            data = await fetch_page(session, next_info["url"])
+            next_info = data["_pagination"]["next"]
+            items.extend(data["items"])
+    else:
+        logger.debug("Received non-paginated data.")
+        items = data
+    logger.debug(f"Received {len(items)} items of data.")
+
+    USER_GROUP.clear()  # Clear previous prometheus metrics
+    for group in items:
+        for user in group["users"]:
+            USER_GROUP.labels(usergroup=f"{group['name']}", username=f"{user}").set(1)
+    logger.info(f"Updated {len(items)} users in user_group_info.")
 
 
 async def main():
@@ -74,8 +85,21 @@ async def main():
         type=str,
         help="Prefix/namespace for the JupyterHub metrics for Prometheus.",
     )
+    argparser.add_argument(
+        "--log_level",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        type=str,
+        help="Set logging level: DEBUG, INFO, WARNING, etc.",
+    )
 
     args = argparser.parse_args()
+
+    logging.basicConfig(
+        level=getattr(logging, args.log_level),
+        format="%(asctime)s [jupyterhub-groups-exporter] %(levelname)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
 
     USER_GROUP = Gauge(
         "user_group_info",
@@ -90,7 +114,10 @@ async def main():
     )
 
     hub_url = URL(args.hub_url)
-    headers = {"Authorization": f"token {args.api_token}"}
+    headers = {
+        "Accept": "application/jupyterhub-pagination+json",
+        "Authorization": f"token {args.api_token}",
+    }
 
     asyncio.get_event_loop()
     async with aiohttp.ClientSession(headers=headers) as session:
