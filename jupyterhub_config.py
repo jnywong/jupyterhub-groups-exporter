@@ -49,6 +49,7 @@ else:
 
 jupyterhub_groups_exporter_port = 9090
 jupyterhub_groups_exporter_interval = 10
+log_level = "INFO"
 c.JupyterHub.services = [
     {
         "name": "groups-exporter",
@@ -65,7 +66,7 @@ c.JupyterHub.services = [
             "--update_exporter_interval",
             f"{jupyterhub_groups_exporter_interval}",
             "--log_level",
-            "DEBUG",
+            f"{log_level}",
         ],
     },
 ]
