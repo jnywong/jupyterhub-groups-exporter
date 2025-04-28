@@ -10,12 +10,11 @@ import sys
 
 c = get_config()  # noqa
 
-n_users = 5
+# API page limit is 50 for users and groups endpoints. Initialize with n_users, with 1 user per group.
+n_users = 100
 c.Authenticator.allowed_users = {f"user-{i}" for i in range(n_users)}
 c.JupyterHub.load_groups = {
-    "group-0": {
-        "users": list(c.Authenticator.allowed_users),
-    },
+    f"group-{i}": dict(users=[f"user-{i}"]) for i in range(n_users)
 }
 
 c.Authenticator.admin_users = {"admin"}
@@ -64,7 +63,7 @@ jupyterhub_groups_exporter_interval = 10
 c.JupyterHub.services = [
     {
         "name": "pytest",
-        "api_token": os.environ["TEST_ADMIN_TOKEN"],
+        "api_token": os.environ.get("TEST_PYTEST_TOKEN"),
     },
     {
         "name": "groups-exporter",
@@ -76,6 +75,8 @@ c.JupyterHub.services = [
             "jupyterhub_groups_exporter.groups_exporter",
             "--port",
             f"{jupyterhub_groups_exporter_port}",
+            "--hub_url",
+            f"http://{c.JupyterHub.hub_ip}:{c.JupyterHub.port}",
             "--update_exporter_interval",
             f"{jupyterhub_groups_exporter_interval}",
         ],
