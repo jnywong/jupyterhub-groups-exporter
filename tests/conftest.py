@@ -93,7 +93,7 @@ async def api_request(
                     raise
             else:
                 logger.error(f"Response code: {resp.status}")
-                return resp.status
+                return None
 
 
 @pytest.fixture(scope="session")
