@@ -1,4 +1,4 @@
-import inspect
+import asyncio
 import logging
 import os
 import secrets
@@ -6,12 +6,12 @@ import shutil
 import signal
 import time
 from functools import partial
-from pathlib import Path
 from subprocess import Popen
 from tempfile import TemporaryDirectory
 from unittest import mock
 
 import aiohttp
+import backoff
 import psutil
 import pytest
 from yarl import URL
@@ -19,25 +19,12 @@ from yarl import URL
 logger = logging.getLogger(__name__)
 
 
-def pytest_collection_modifyitems(items):
-    """This function is automatically run by pytest passing all collected test
-    functions.
-
-    We use it to add asyncio marker to all async tests and assert we don't use
-    test functions that are async generators which wouldn't make sense.
-    """
-    for item in items:
-        if inspect.iscoroutinefunction(item.obj):
-            item.add_marker("asyncio")
-        assert not inspect.isasyncgenfunction(item.obj)
-
-
 @pytest.fixture(scope="session")
 def admin_token():
     """Generate a token to use for admin requests"""
     token = secrets.token_hex(16)
     # jupyterhub subprocess loads this from the environment
-    with mock.patch.dict(os.environ, {"TEST_ADMIN_TOKEN": token}):
+    with mock.patch.dict(os.environ, {"TEST_PYTEST_TOKEN": token}):
         yield token
 
 
@@ -50,9 +37,9 @@ def hub_url():
 @pytest.fixture(scope="session")
 async def hub(hub_url, request, admin_token):
     """Start JupyterHub, set up to use admin and service tokens"""
-    jupyterhub_config = Path.cwd().joinpath("tests/jupyterhub_config.py")
+    jupyterhub_config = os.path.dirname(__file__) + "/jupyterhub_config.py"
     with TemporaryDirectory() as td:
-        shutil.copy(jupyterhub_config, Path(td).joinpath("jupyterhub_config.py"))
+        shutil.copy(jupyterhub_config, td + "/jupyterhub_config.py")
         hub = Popen(["jupyterhub", "--debug"], cwd=td)
 
         def cleanup():
@@ -68,23 +55,23 @@ async def hub(hub_url, request, admin_token):
 
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
-            try:
-                await api_request(
-                    hub_url=hub_url, path="hub/api/info", token=admin_token
-                )
+            resp = await api_request(
+                hub_url=hub_url, path="hub/api/info", token=admin_token
+            )
+            if resp:
+                logger.info(f"{resp}")
                 logger.info("hub started")
-            except Exception as e:
-                logger.info(f"hub: {e}")
-                if hub.poll() is not None:
-                    raise RuntimeError("hub failed to start")
-                time.sleep(1)
-                continue
-            else:
                 break
+            else:
+                logger.info(f"{resp}")
+                logger.info("waiting for hub to start")
+                await asyncio.sleep(1)
+                continue
 
         yield hub
 
 
+@backoff.on_exception(backoff.expo, aiohttp.ClientError, max_tries=8, logger=logger)
 async def api_request(
     hub_url: str, path: str, token: str = None, parse_json: bool = True
 ):
@@ -92,6 +79,7 @@ async def api_request(
     headers = {"Authorization": f"token {token}"}
     hub_url = URL(hub_url)
     url = hub_url.with_path(f"{path}")
+    logger.info(f"Making request to {url}")
     async with aiohttp.ClientSession() as session:
         async with session.get(url, headers=headers) as resp:
             if resp.status == 200:
@@ -105,9 +93,10 @@ async def api_request(
                     raise
             else:
                 logger.error(f"Response code: {resp.status}")
+                return resp.status
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def admin_request(hub, hub_url, admin_token):
     """make an API request to a path with an admin token"""
     return partial(api_request, hub_url, token=admin_token)
