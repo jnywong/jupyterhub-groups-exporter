@@ -51,7 +51,9 @@ async def update_user_group_info(
         for user in group["users"]:
             n_users += 1
             USER_GROUP.labels(usergroup=f"{group['name']}", username=f"{user}").set(1)
-    logger.info(f"Updated {len(items)} groups and {n_users} in user_group_info.")
+    logger.info(
+        f"Updated {len(items)} groups and {n_users} users for metric user_group_info."
+    )
 
 
 async def main():
