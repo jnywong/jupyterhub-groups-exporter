@@ -65,6 +65,8 @@ c.JupyterHub.services = [
             f"http://{c.JupyterHub.hub_ip}:{c.JupyterHub.port}",
             "--update_exporter_interval",
             f"{jupyterhub_groups_exporter_interval}",
+            # "--groups_allowed",
+            # "group-0", "group-1",
             "--log_level",
             f"{log_level}",
         ],
