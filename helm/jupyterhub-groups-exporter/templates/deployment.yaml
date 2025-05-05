@@ -36,7 +36,7 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["python", "-m", "jupyterhub_groups_exporter.groups_exporter"]
-          args: ["--port", "{{ .Values.service.port }}", "--update_exporter_interval", "{{ .Values.config.groupsExporter.update_exporter_interval }}", "--log_level", "{{ .Values.config.groupsExporter.log_level }}"]
+          args: [{{- if .Values.config.groupsExporter.allowed_groups }}"--allowed_groups", "{{ .Values.config.groupsExporter.allowed_groups }}"{{ - end }}"--port", "{{ .Values.service.port }}", "--update_exporter_interval", "{{ .Values.config.groupsExporter.update_exporter_interval }}", "--log_level", "{{ .Values.config.groupsExporter.log_level }}"]
           env:
             {{- with .Values.extraEnv }}
             {{- tpl (. | toYaml) $ | nindent 12 }}

@@ -29,7 +29,7 @@ async def fetch_page(session: aiohttp.ClientSession, hub_url: URL, path: str = F
 async def update_user_group_info(
     session: aiohttp.ClientSession,
     hub_url: URL,
-    groups_allowed: list,
+    allowed_groups: list,
     USER_GROUP: Gauge,
 ):
     """
@@ -52,8 +52,8 @@ async def update_user_group_info(
     USER_GROUP.clear()  # Clear previous prometheus metrics
     for group in items:
         for user in group["users"]:
-            if groups_allowed:
-                if group["name"] in groups_allowed:
+            if allowed_groups:
+                if group["name"] in allowed_groups:
                     n_groups += 1
                     n_users += 1
                     USER_GROUP.labels(
@@ -87,7 +87,7 @@ async def main():
         help="Time interval between each update of the JupyterHub groups exporter (seconds).",
     )
     argparser.add_argument(
-        "--groups_allowed",
+        "--allowed_groups",
         nargs="*",
         help="List of allowed user groups to be exported. If not provided, all groups will be exported.",
     )
@@ -132,9 +132,9 @@ async def main():
         namespace=args.jupyterhub_metrics_prefix,
     )
 
-    if args.groups_allowed:
+    if args.allowed_groups:
         logger.info(
-            f"Filtering JupyterHub user groups exporter to only include: {args.groups_allowed}"
+            f"Filtering JupyterHub user groups exporter to only include: {args.allowed_groups}"
         )
 
     start_http_server(args.port)
@@ -152,7 +152,7 @@ async def main():
     async with aiohttp.ClientSession(headers=headers) as session:
         while True:
             await update_user_group_info(
-                session, hub_url, args.groups_allowed, USER_GROUP
+                session, hub_url, args.allowed_groups, USER_GROUP
             )
             await asyncio.sleep(args.update_exporter_interval)
 
