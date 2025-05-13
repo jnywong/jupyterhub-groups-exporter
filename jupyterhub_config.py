@@ -9,11 +9,13 @@ import sys
 c = get_config()  # noqa
 
 # API page limit is 50 for users and groups endpoints. Initialize with n_users, with 1 user per group.
-n_users = 100
+n_users = 5
 c.Authenticator.allowed_users = {f"user-{i}" for i in range(n_users)}
 c.JupyterHub.load_groups = {
     f"group-{i}": dict(users=[f"user-{i}"]) for i in range(n_users)
 }
+c.JupyterHub.load_groups.update({"group-2": dict(users=["user-0", "user-2"])})
+c.JupyterHub.load_groups["group-1"]["users"].append("user-0")  # Add user-0 to group-1
 
 c.Authenticator.admin_users = {"admin"}
 c.JupyterHub.authenticator_class = "dummy"
@@ -65,8 +67,11 @@ c.JupyterHub.services = [
             f"http://{c.JupyterHub.hub_ip}:{c.JupyterHub.port}",
             "--update_exporter_interval",
             f"{jupyterhub_groups_exporter_interval}",
-            # "--groups_allowed",
-            # "group-0", "group-1",
+            "--allowed_groups",
+            "group-0",
+            "group-2",
+            "--default_group",
+            "group-2",
             "--log_level",
             f"{log_level}",
         ],
