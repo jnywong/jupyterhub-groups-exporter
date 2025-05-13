@@ -170,6 +170,11 @@ async def main():
     else:
         args.allowed_groups = None
 
+    if args.default_group:
+        logger.info(
+            f"Default group for users with multiple group memberships: {args.default_group}"
+        )
+
     start_http_server(args.port)
     logger.info(
         f"Starting JupyterHub user groups Prometheus exporter on port {args.port} with an update interval of {args.update_exporter_interval} seconds."
