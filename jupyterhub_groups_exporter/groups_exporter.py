@@ -6,6 +6,7 @@ import argparse
 import asyncio
 import logging
 import os
+from collections import Counter
 
 import aiohttp
 import backoff
@@ -30,6 +31,7 @@ async def update_user_group_info(
     session: aiohttp.ClientSession,
     hub_url: URL,
     allowed_groups: list,
+    default_group: str,
     USER_GROUP: Gauge,
 ):
     """
@@ -48,26 +50,49 @@ async def update_user_group_info(
         logger.debug("Received non-paginated data.")
         items = data
 
-    n_users, n_groups = 0, 0
+    logger.debug(f"Items: {items}")
+    list_groups = (
+        [group["name"] for group in items] if allowed_groups is None else allowed_groups
+    )
+    list_users = (
+        [
+            user
+            for group in items
+            if group["name"] in allowed_groups
+            for user in group["users"]
+        ]
+        if allowed_groups
+        else [user for group in items for user in group["users"]]
+    )
+    user_counts = Counter(list_users)
+    users_in_multiple_groups = [
+        user for user, count in user_counts.items() if count > 1
+    ]
+    unique_users = list(set(list_users))
+    logger.debug(f"List groups: {list_groups}")
+    logger.debug(f"Users in multiple groups: {users_in_multiple_groups}")
+    logger.info(
+        f"Updating {len(list_groups)} groups and {len(unique_users)} users for metric user_group_info."
+    )
     USER_GROUP.clear()  # Clear previous prometheus metrics
     for group in items:
+        if group["name"] not in list_groups:
+            logger.debug(f"Group {group['name']} is not in allowed groups, skipping.")
+            continue
         for user in group["users"]:
-            if allowed_groups:
-                if group["name"] in allowed_groups:
-                    n_groups += 1
-                    n_users += 1
-                    USER_GROUP.labels(
-                        usergroup=f"{group['name']}", username=f"{user}"
-                    ).set(1)
-            else:
-                n_groups += 1
-                n_users += 1
-                USER_GROUP.labels(usergroup=f"{group['name']}", username=f"{user}").set(
+            if user in users_in_multiple_groups:
+                USER_GROUP.labels(usergroup=f"{default_group}", username=f"{user}").set(
                     1
                 )
-    logger.info(
-        f"Updated {n_groups} groups and {n_users} users for metric user_group_info."
-    )
+                logger.debug(
+                    f"User {user} is in multiple groups, assigning to default group {default_group}."
+                )
+                continue
+            else:
+                USER_GROUP.labels(usergroup=f"{group["name"]}", username=f"{user}").set(
+                    1
+                )
+                logger.info(f"User {user} is in group {group["name"]}.")
 
 
 async def main():
@@ -90,6 +115,12 @@ async def main():
         "--allowed_groups",
         nargs="*",
         help="List of allowed user groups to be exported. If not provided, all groups will be exported.",
+    )
+    argparser.add_argument(
+        "--default_group",
+        default="other",
+        type=str,
+        help="Default group to account usage against for users with multiple group memberships.",
     )
     argparser.add_argument(
         "--hub_url",
@@ -136,6 +167,8 @@ async def main():
         logger.info(
             f"Filtering JupyterHub user groups exporter to only include: {args.allowed_groups}"
         )
+    else:
+        args.allowed_groups = None
 
     start_http_server(args.port)
     logger.info(
@@ -152,7 +185,7 @@ async def main():
     async with aiohttp.ClientSession(headers=headers) as session:
         while True:
             await update_user_group_info(
-                session, hub_url, args.allowed_groups, USER_GROUP
+                session, hub_url, args.allowed_groups, args.default_group, USER_GROUP
             )
             await asyncio.sleep(args.update_exporter_interval)
 
