@@ -1,8 +1,7 @@
 config:
   groupsExporter:
-    update_exporter_interval: 60
+    update_exporter_interval: 3600
     log_level: INFO
-    default_group: "test"
 
 extraEnv:
   - name: JUPYTERHUB_API_TOKEN
@@ -14,10 +13,8 @@ extraEnv:
     value: "1"
 
 image:
-  # repository: quay.io/2i2c/jupyterhub-groups-exporter
-  # tag: "set-by-chartpress"
-  repository: jupyterhub-groups-exporter
-  tag: default_group
+  repository: quay.io/2i2c/jupyterhub-groups-exporter
+  tag: "set-by-chartpress"
 
 service:
   type: ClusterIP
