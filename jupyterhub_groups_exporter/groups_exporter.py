@@ -32,6 +32,7 @@ async def update_user_group_info(
     hub_url: URL,
     allowed_groups: list,
     default_group: str,
+    namespace: str,
     USER_GROUP: Gauge,
 ):
     """
@@ -81,17 +82,21 @@ async def update_user_group_info(
             continue
         for user in group["users"]:
             if user in users_in_multiple_groups:
-                USER_GROUP.labels(usergroup=f"{default_group}", username=f"{user}").set(
-                    1
-                )
-                logger.debug(
+                USER_GROUP.labels(
+                    namespace=f"{namespace}",
+                    usergroup=f"{default_group}",
+                    username=f"{user}",
+                ).set(1)
+                logger.info(
                     f"User {user} is in multiple groups, assigning to default group {default_group}."
                 )
                 continue
             else:
-                USER_GROUP.labels(usergroup=f"{group["name"]}", username=f"{user}").set(
-                    1
-                )
+                USER_GROUP.labels(
+                    namespace=f"{namespace}",
+                    usergroup=f"{group["name"]}",
+                    username=f"{user}",
+                ).set(1)
                 logger.info(f"User {user} is in group {group["name"]}.")
 
 
@@ -135,6 +140,12 @@ async def main():
         help="Token to talk to the JupyterHub API.",
     )
     argparser.add_argument(
+        "--jupyterhub_namespace",
+        default=os.environ.get("NAMESPACE"),
+        type=str,
+        help="Kubernetes namespace where the JupyterHub is deployed.",
+    )
+    argparser.add_argument(
         "--jupyterhub_metrics_prefix",
         default=os.environ.get("JUPYTERHUB_METRICS_PREFIX", "jupyterhub"),
         type=str,
@@ -158,8 +169,12 @@ async def main():
 
     USER_GROUP = Gauge(
         "user_group_info",
-        "JupyterHub username and user group membership information.",
-        ["username", "usergroup"],
+        "JupyterHub namespace, username and user group membership information.",
+        [
+            "namespace",
+            "usergroup",
+            "username",
+        ],
         namespace=args.jupyterhub_metrics_prefix,
     )
 
@@ -177,7 +192,7 @@ async def main():
 
     start_http_server(args.port)
     logger.info(
-        f"Starting JupyterHub user groups Prometheus exporter on port {args.port} with an update interval of {args.update_exporter_interval} seconds."
+        f"Starting JupyterHub user groups Prometheus exporter in namespace {args.jupyterhub_namespace}, port {args.port} with an update interval of {args.update_exporter_interval} seconds."
     )
 
     hub_url = URL(args.hub_url)
@@ -190,7 +205,12 @@ async def main():
     async with aiohttp.ClientSession(headers=headers) as session:
         while True:
             await update_user_group_info(
-                session, hub_url, args.allowed_groups, args.default_group, USER_GROUP
+                session,
+                hub_url,
+                args.allowed_groups,
+                args.default_group,
+                args.jupyterhub_namespace,
+                USER_GROUP,
             )
             await asyncio.sleep(args.update_exporter_interval)
 
