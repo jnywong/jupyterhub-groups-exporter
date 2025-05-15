@@ -41,6 +41,8 @@ spec:
             {{- with .Values.extraEnv }}
             {{- tpl (. | toYaml) $ | nindent 12 }}
             {{- end }}
+            - name: NAMESPACE
+              value: {{ .Release.Name }}            
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}
