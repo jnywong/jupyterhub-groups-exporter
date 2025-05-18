@@ -6,10 +6,12 @@ import argparse
 import asyncio
 import logging
 import os
+import string
 from collections import Counter
 
 import aiohttp
 import backoff
+import escapism
 from prometheus_client import Gauge, start_http_server
 from yarl import URL
 
@@ -25,6 +27,17 @@ async def fetch_page(session: aiohttp.ClientSession, hub_url: URL, path: str = F
     logger.debug(f"Fetching {url}")
     async with session.get(url) as response:
         return await response.json()
+
+
+def escape_username(username: str) -> str:
+    """
+    Escape the username when a 'safe' string is required, e.g. kubernetes pod labels, directory names, etc.
+    """
+    safe_chars = set(string.ascii_lowercase + string.digits)
+    escaped_username = escapism.escape(
+        username, safe=safe_chars, escape_char="-"
+    ).lower()
+    return escaped_username
 
 
 async def update_user_group_info(
@@ -86,6 +99,7 @@ async def update_user_group_info(
                     namespace=f"{namespace}",
                     usergroup=f"{default_group}",
                     username=f"{user}",
+                    username_escaped=escape_username(user),
                 ).set(1)
                 logger.info(
                     f"User {user} is in multiple groups, assigning to default group {default_group}."
@@ -96,6 +110,7 @@ async def update_user_group_info(
                     namespace=f"{namespace}",
                     usergroup=f"{group["name"]}",
                     username=f"{user}",
+                    username_escaped=escape_username(user),
                 ).set(1)
                 logger.info(f"User {user} is in group {group["name"]}.")
 
@@ -174,6 +189,7 @@ async def main():
             "namespace",
             "usergroup",
             "username",
+            "username_escaped",
         ],
         namespace=args.jupyterhub_metrics_prefix,
     )
