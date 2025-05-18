@@ -21,6 +21,7 @@ dependencies = [
     "asyncio>=3.4.0",
     "backoff>=2.2.0",
     "prometheus_client>=0.21.0",
+    "git+https://github.com/minrk/escapism.git>=1.1.0.dev0"
 ]
 dynamic = ["version"]
 
