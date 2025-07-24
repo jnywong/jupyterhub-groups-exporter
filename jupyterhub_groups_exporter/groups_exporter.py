@@ -18,7 +18,7 @@ from yarl import URL
 logger = logging.getLogger(__name__)
 
 
-@backoff.on_exception(backoff.expo, aiohttp.ClientError, max_tries=8, logger=logger)
+@backoff.on_exception(backoff.expo, aiohttp.ClientError, max_tries=12, logger=logger)
 async def fetch_page(session: aiohttp.ClientSession, hub_url: URL, path: str = False):
     """
     Fetch a page from the JupyterHub API.
