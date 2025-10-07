@@ -12,10 +12,19 @@ from collections import Counter
 import aiohttp
 import backoff
 import escapism
-from prometheus_client import Gauge, start_http_server
+from aiohttp import web
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    CollectorRegistry,
+    Gauge,
+    generate_latest,
+)
 from yarl import URL
 
 logger = logging.getLogger(__name__)
+
+
+registry_groups = CollectorRegistry()
 
 
 @backoff.on_exception(backoff.expo, aiohttp.ClientError, max_tries=12, logger=logger)
@@ -41,16 +50,17 @@ def escape_username(username: str) -> str:
 
 
 async def update_user_group_info(
-    session: aiohttp.ClientSession,
-    hub_url: URL,
-    allowed_groups: list,
-    double_count: str,
-    namespace: str,
-    USER_GROUP: Gauge,
+    app: web.Application,
 ):
     """
     Update the prometheus exporter with user group memberships fetched from the JupyterHub API.
     """
+    session = app["session"]
+    hub_url = app["hub_url"]
+    allowed_groups = app["allowed_groups"]
+    double_count = app["double_count"]
+    namespace = app["namespace"]
+    USER_GROUP = app["USER_GROUP"]
     data = await fetch_page(session, hub_url, "hub/api/groups")
     if "_pagination" in data:
         logger.debug(f"Received paginated data: {data['_pagination']}")
@@ -124,7 +134,68 @@ async def update_user_group_info(
             logger.info(f"User {user} is in group {group}.")
 
 
-async def main():
+async def handle_home(request: web.Request):
+    return web.Response(
+        text="Welcome to the JupyterHub user groups exporter service.", status=200
+    )
+
+
+async def handle_groups(request: web.Request):
+    return web.Response(
+        body=generate_latest(registry_groups),
+        status=200,
+        content_type=CONTENT_TYPE_LATEST,
+    )
+
+
+async def background_update(app: web.Application, update_function: callable):
+    while True:
+        try:
+            data = await update_function(app)
+            logger.debug(f"Fetched data: {data}")
+        except Exception as e:
+            logger.error(f"Error updating user group info: {e}")
+        await asyncio.sleep(app["update_interval"])
+
+
+async def on_startup(app):
+    app["session"] = aiohttp.ClientSession(headers=app["headers"])
+    logger.info("Client session started.")
+    app["task"] = asyncio.create_task(background_update(app, update_user_group_info))
+
+
+async def on_cleanup(app):
+    await app["session"].close()
+    logger.info("Client session closed.")
+
+
+def sub_app(
+    headers: str = None,
+    hub_url: str = None,
+    allowed_groups: list = None,
+    double_count: str = None,
+    namespace: str = None,
+    jupyterhub_metrics_prefix: str = None,
+    update_interval: int = None,
+    USER_GROUP: Gauge = None,
+):
+    app = web.Application()
+    app["headers"] = headers
+    app["hub_url"] = URL(hub_url)
+    app["allowed_groups"] = allowed_groups
+    app["double_count"] = double_count
+    app["namespace"] = namespace
+    app["jupyterhub_metrics_prefix"] = jupyterhub_metrics_prefix
+    app["update_interval"] = update_interval
+    app["USER_GROUP"] = USER_GROUP
+    app.router.add_get("/", handle_home)
+    app.router.add_get("/metrics/user-groups", handle_groups)
+    app.on_startup.append(on_startup)
+    app.on_cleanup.append(on_cleanup)
+    return app
+
+
+def main():
     argparser = argparse.ArgumentParser(
         description="JupyterHub user groups exporter for Prometheus."
     )
@@ -158,7 +229,13 @@ async def main():
         help="JupyterHub service URL, e.g. http://localhost:8000 for local development.",
     )
     argparser.add_argument(
-        "--api_token",
+        "--hub_service_prefix",
+        default=os.environ.get("JUPYTERHUB_SERVICE_PREFIX").rstrip("/"),
+        type=str,
+        help="JupyterHub service prefix, e.g. /services/groups-exporter.",
+    )
+    argparser.add_argument(
+        "--hub_api_token",
         default=os.environ.get("JUPYTERHUB_API_TOKEN"),
         type=str,
         help="Token to talk to the JupyterHub API.",
@@ -191,18 +268,6 @@ async def main():
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
-    USER_GROUP = Gauge(
-        "user_group_info",
-        "JupyterHub namespace, username and user group membership information.",
-        [
-            "namespace",
-            "usergroup",
-            "username",
-            "username_escaped",
-        ],
-        namespace=args.jupyterhub_metrics_prefix,
-    )
-
     if args.allowed_groups:
         logger.info(
             f"Filtering JupyterHub user groups exporter to only include: {args.allowed_groups}"
@@ -215,30 +280,44 @@ async def main():
             f"Double-count users with multiple group memberships: {args.double_count}"
         )
 
-    start_http_server(args.port)
     logger.info(
         f"Starting JupyterHub user groups Prometheus exporter in namespace {args.jupyterhub_namespace}, port {args.port} with an update interval of {args.update_exporter_interval} seconds."
     )
 
-    hub_url = URL(args.hub_url)
+    USER_GROUP = Gauge(
+        "user_group_info",
+        "JupyterHub namespace, username and user group membership information.",
+        [
+            "namespace",
+            "usergroup",
+            "username",
+            "username_escaped",
+        ],
+        namespace=args.jupyterhub_metrics_prefix,
+        registry=registry_groups,
+    )
+
+    URL(args.hub_url)
     headers = {
         "Accept": "application/jupyterhub-pagination+json",
-        "Authorization": f"token {args.api_token}",
+        "Authorization": f"token {args.hub_api_token}",
     }
 
-    asyncio.get_event_loop()
-    async with aiohttp.ClientSession(headers=headers) as session:
-        while True:
-            await update_user_group_info(
-                session,
-                hub_url,
-                args.allowed_groups,
-                args.double_count,
-                args.jupyterhub_namespace,
-                USER_GROUP,
-            )
-            await asyncio.sleep(args.update_exporter_interval)
+    app = web.Application()
+    # Mount sub app to route the hub service prefix
+    metrics_app = sub_app(
+        headers=headers,
+        hub_url=args.hub_url,
+        allowed_groups=args.allowed_groups,
+        double_count=args.double_count,
+        namespace=args.jupyterhub_namespace,
+        jupyterhub_metrics_prefix=args.jupyterhub_metrics_prefix,
+        update_interval=args.update_exporter_interval,
+        USER_GROUP=USER_GROUP,
+    )
+    app.add_subapp(args.hub_service_prefix, metrics_app)
+    web.run_app(app, port=args.port)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
