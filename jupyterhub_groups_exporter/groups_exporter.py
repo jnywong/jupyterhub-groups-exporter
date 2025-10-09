@@ -1,43 +1,34 @@
-"""
-Prometheus user groups exported by JupyterHub.
-"""
-
-import argparse
-import asyncio
+import copy
 import logging
-import os
 import string
 from collections import Counter
+from datetime import datetime, timedelta
 
 import aiohttp
 import backoff
 import escapism
 from aiohttp import web
-from prometheus_client import (
-    CollectorRegistry,
-    Gauge,
-    generate_latest,
-)
 from yarl import URL
+
+from .metrics import USER_GROUP
 
 logger = logging.getLogger(__name__)
 
 
-registry_groups = CollectorRegistry()
-
-
 @backoff.on_exception(backoff.expo, aiohttp.ClientError, max_tries=12, logger=logger)
-async def fetch_page(session: aiohttp.ClientSession, hub_url: URL, path: str = False):
+async def fetch_page(
+    session: aiohttp.ClientSession, url: URL, path: str = False, params: dict = None
+):
     """
     Fetch a page from the JupyterHub API.
     """
-    url = hub_url / path if path else hub_url
+    url = url / path if path else url
     logger.debug(f"Fetching {url}")
-    async with session.get(url) as response:
+    async with session.get(url, params=params) as response:
         return await response.json()
 
 
-def escape_username(username: str) -> str:
+def _escape_username(username: str) -> str:
     """
     Escape the username when a 'safe' string is required, e.g. kubernetes pod labels, directory names, etc.
     """
@@ -50,6 +41,7 @@ def escape_username(username: str) -> str:
 
 async def update_user_group_info(
     app: web.Application,
+    config: dict = None,
 ):
     """
     Update the prometheus exporter with user group memberships fetched from the JupyterHub API.
@@ -59,7 +51,6 @@ async def update_user_group_info(
     allowed_groups = app["allowed_groups"]
     double_count = app["double_count"]
     namespace = app["namespace"]
-    USER_GROUP = app["USER_GROUP"]
     data = await fetch_page(session, hub_url, "hub/api/groups")
     if "_pagination" in data:
         logger.debug(f"Received paginated data: {data['_pagination']}")
@@ -116,202 +107,77 @@ async def update_user_group_info(
                 namespace=f"{namespace}",
                 usergroup="multiple",
                 username=f"{user}",
-                username_escaped=escape_username(user),
+                username_escaped=_escape_username(user),
             ).set(1)
             logger.info(
                 f"User {user} is in multiple groups: assigning to default group 'multiple'."
             )
-            if double_count == "False":
+            if double_count == False:
                 continue
         for group in user_to_groups[user]:
             USER_GROUP.labels(
                 namespace=f"{namespace}",
                 usergroup=f"{group}",
                 username=f"{user}",
-                username_escaped=escape_username(user),
+                username_escaped=_escape_username(user),
             ).set(1)
             logger.info(f"User {user} is in group {group}.")
+    app["user_group_map"] = user_to_groups
 
 
-async def handle(request: web.Request):
-    return web.Response(
-        body=generate_latest(registry_groups),
-        status=200,
-        content_type="text/plain",
+async def update_group_usage(app: web.Application, config: dict):
+    """
+    Attach user and group labels for metrics used to populate the User Group Diagnostics dashboard.
+    """
+    logger.info("This is the update_group_usage coroutine.")
+    namespace = app["namespace"]
+    prometheus_host = app["prometheus_host"]
+    prometheus_port = app["prometheus_port"]
+    update_usage_interval = app["update_usage_interval"]
+    user_group_map = app["user_group_map"]
+    logger.debug(f"User group map: {user_group_map}")
+    prometheus_api = URL.build(
+        scheme="http", host=prometheus_host, port=prometheus_port
     )
-
-
-async def background_update(app: web.Application, update_function: callable):
-    while True:
-        try:
-            data = await update_function(app)
-            logger.debug(f"Fetched data: {data}")
-        except Exception as e:
-            logger.error(f"Error updating user group info: {e}")
-        await asyncio.sleep(app["update_interval"])
-
-
-async def on_startup(app):
-    app["session"] = aiohttp.ClientSession(headers=app["headers"])
-    logger.info("Client session started.")
-    app["task"] = asyncio.create_task(background_update(app, update_user_group_info))
-
-
-async def on_cleanup(app):
-    await app["session"].close()
-    logger.info("Client session closed.")
-
-
-def sub_app(
-    headers: str = None,
-    hub_url: str = None,
-    allowed_groups: list = None,
-    double_count: str = None,
-    namespace: str = None,
-    jupyterhub_metrics_prefix: str = None,
-    update_interval: int = None,
-    USER_GROUP: Gauge = None,
-):
-    app = web.Application()
-    app["headers"] = headers
-    app["hub_url"] = URL(hub_url)
-    app["allowed_groups"] = allowed_groups
-    app["double_count"] = double_count
-    app["namespace"] = namespace
-    app["jupyterhub_metrics_prefix"] = jupyterhub_metrics_prefix
-    app["update_interval"] = update_interval
-    app["USER_GROUP"] = USER_GROUP
-    app.router.add_get("/", handle)
-    app.on_startup.append(on_startup)
-    app.on_cleanup.append(on_cleanup)
-    return app
-
-
-def main():
-    argparser = argparse.ArgumentParser(
-        description="JupyterHub user groups exporter for Prometheus."
-    )
-    argparser.add_argument(
-        "--port",
-        default=9090,
-        type=int,
-        help="Port to listen on for the groups exporter.",
-    )
-    argparser.add_argument(
-        "--update_exporter_interval",
-        default=3600,
-        type=int,
-        help="Time interval between each update of the JupyterHub groups exporter (seconds).",
-    )
-    argparser.add_argument(
-        "--allowed_groups",
-        nargs="*",
-        help="List of allowed user groups to be exported. If not provided, all groups will be exported.",
-    )
-    argparser.add_argument(
-        "--double_count",
-        default="True",
-        type=str,
-        help="If 'True', double-count usage for users with multiple group memberships. If 'False', do not double-count. All users with multiple group memberships will be assigned to a default group called 'multiple'.",
-    )
-    argparser.add_argument(
-        "--hub_url",
-        default=f"http://{os.environ.get('HUB_SERVICE_HOST')}:{os.environ.get('HUB_SERVICE_PORT')}",
-        type=str,
-        help="JupyterHub service URL, e.g. http://localhost:8000 for local development.",
-    )
-    argparser.add_argument(
-        "--hub_service_prefix",
-        default=os.environ.get(
-            "JUPYTERHUB_SERVICE_PREFIX", "/services/groups-exporter/"
-        ),
-        type=str,
-        help="JupyterHub service prefix, defaults to '/services/groups-exporter/'.",
-    )
-    argparser.add_argument(
-        "--hub_api_token",
-        default=os.environ.get("JUPYTERHUB_API_TOKEN"),
-        type=str,
-        help="Token to talk to the JupyterHub API.",
-    )
-    argparser.add_argument(
-        "--jupyterhub_namespace",
-        default=os.environ.get("NAMESPACE"),
-        type=str,
-        help="Kubernetes namespace where the JupyterHub is deployed.",
-    )
-    argparser.add_argument(
-        "--jupyterhub_metrics_prefix",
-        default=os.environ.get("JUPYTERHUB_METRICS_PREFIX", "jupyterhub"),
-        type=str,
-        help="Prefix/namespace for the JupyterHub metrics for Prometheus.",
-    )
-    argparser.add_argument(
-        "--log_level",
-        default="INFO",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
-        type=str,
-        help="Set logging level: DEBUG, INFO, WARNING, etc.",
-    )
-
-    args = argparser.parse_args()
-
-    logging.basicConfig(
-        level=getattr(logging, args.log_level),
-        format="%(asctime)s [jupyterhub-groups-exporter] %(levelname)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-
-    if args.allowed_groups:
-        logger.info(
-            f"Filtering JupyterHub user groups exporter to only include: {args.allowed_groups}"
-        )
-    else:
-        args.allowed_groups = None
-
-    if args.double_count:
-        logger.info(
-            f"Double-count users with multiple group memberships: {args.double_count}"
-        )
-
-    logger.info(
-        f"Starting JupyterHub user groups Prometheus exporter in namespace {args.jupyterhub_namespace}, port {args.port} with an update interval of {args.update_exporter_interval} seconds."
-    )
-
-    USER_GROUP = Gauge(
-        "user_group_info",
-        "JupyterHub namespace, username and user group membership information.",
-        [
-            "namespace",
-            "usergroup",
-            "username",
-            "username_escaped",
-        ],
-        namespace=args.jupyterhub_metrics_prefix,
-        registry=registry_groups,
-    )
-
-    URL(args.hub_url)
-    headers = {
-        "Accept": "application/jupyterhub-pagination+json",
-        "Authorization": f"token {args.hub_api_token}",
+    query = config["query"].replace('namespace=~".*"', f'namespace="{namespace}"')
+    from_date = datetime.utcnow() - timedelta(seconds=update_usage_interval)
+    to_date = datetime.utcnow()
+    step = str(config["update_interval"]) + "s"
+    parameters = {
+        "query": query,
+        "start": from_date.isoformat() + "Z",
+        "end": to_date.isoformat() + "Z",
+        "step": step,
     }
-
-    app = web.Application()
-    # Mount sub app to route the hub service prefix
-    metrics_app = sub_app(
-        headers=headers,
-        hub_url=args.hub_url,
-        allowed_groups=args.allowed_groups,
-        double_count=args.double_count,
-        namespace=args.jupyterhub_namespace,
-        jupyterhub_metrics_prefix=args.jupyterhub_metrics_prefix,
-        update_interval=args.update_exporter_interval,
-        USER_GROUP=USER_GROUP,
+    logger.debug(f"Prometheus query parameters: {parameters}")
+    data = await fetch_page(
+        session=app["session"],
+        url=prometheus_api,
+        path="api/v1/query_range",
+        params=parameters,
     )
-    app.add_subapp(args.hub_service_prefix, metrics_app)
-    web.run_app(app, port=args.port)
-
-
-if __name__ == "__main__":
-    main()
+    if data["status"] != "success":
+        raise aiohttp.ClientError(f"Bad response from Prometheus: {data}")
+    results = data["data"]["result"]
+    logger.debug(f"Prometheus results: {results}")
+    joined = []
+    for r in results:
+        username = r["metric"]["username"]
+        groups = user_group_map.get(username, [])
+        if not groups:
+            joined.append(r)
+        else:
+            for group in groups:
+                r_copy = copy.deepcopy(r)
+                r_copy["metric"]["usergroup"] = group
+                joined.append(r_copy)
+    logger.debug(f"Joined metrics: {joined}")
+    # Export joined metrics
+    config["metric"].clear()
+    for j in joined:
+        config["metric"].labels(
+            namespace=f"{namespace}",
+            username=f"{j['metric']['username']}",
+            username_escaped=_escape_username(j["metric"]["username"]),
+            usergroup=f"{j['metric']['usergroup']}",
+        ).set(float(j["values"][-1][-1]))

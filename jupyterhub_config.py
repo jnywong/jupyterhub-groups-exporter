@@ -17,6 +17,7 @@ c.JupyterHub.load_groups = {
 c.JupyterHub.load_groups.update({"group-2": dict(users=["user-0", "user-2"])})
 c.JupyterHub.load_groups["group-1"]["users"].append("user-0")  # Add user-0 to group-1
 
+
 c.Authenticator.admin_users = {"admin"}
 c.JupyterHub.authenticator_class = "dummy"
 c.JupyterHub.spawner_class = "simple"
@@ -50,8 +51,8 @@ else:
         f.write(token)
 
 jupyterhub_groups_exporter_port = 8080
-jupyterhub_groups_exporter_interval = 10
-log_level = "INFO"
+jupyterhub_groups_exporter_interval = 30
+log_level = "DEBUG"
 c.JupyterHub.services = [
     {
         "name": "groups-exporter",
@@ -60,20 +61,19 @@ c.JupyterHub.services = [
         "command": [
             sys.executable,
             "-m",
-            "jupyterhub_groups_exporter.groups_exporter",
+            "jupyterhub_groups_exporter.app",
             "--port",
             f"{jupyterhub_groups_exporter_port}",
             "--hub_url",
             f"http://{c.JupyterHub.hub_ip}:{c.JupyterHub.port}",
-            "--update_exporter_interval",
+            "--update_info_interval",
             f"{jupyterhub_groups_exporter_interval}",
-            "--allowed_groups",
-            "group-0",
-            "group-2",
             "--double_count",
-            "True",
+            "true",
             "--log_level",
             f"{log_level}",
+            "--jupyterhub_namespace",
+            "default",
         ],
     },
 ]
