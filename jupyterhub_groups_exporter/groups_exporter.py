@@ -103,6 +103,7 @@ async def update_user_group_info(
     # Loop over users
     for user in list(user_to_groups.keys()):
         if user in users_in_multiple_groups:
+            user_to_groups[user].append("multiple")
             USER_GROUP.labels(
                 namespace=f"{namespace}",
                 usergroup="multiple",
